@@ -256,7 +256,7 @@ public class IntentPlugin extends CordovaPlugin {
             File temp = new File(path);
             OutputStream output = new FileOutputStream(temp, false);
 
-            byte[] buffer = new byte[128 * 1024];
+            byte[] buffer = new byte[256 * 1024];
             int read;
             while ((read = fileInput.read(buffer)) != -1) output.write(buffer, 0, read);
 
