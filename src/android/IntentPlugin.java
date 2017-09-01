@@ -1,7 +1,6 @@
 package com.napolitano.cordova.plugin.intent;
 
 import java.io.File;
-import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -9,14 +8,12 @@ import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.Set;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.os.ParcelFileDescriptor;
-import android.provider.MediaStore;
 import android.database.Cursor;
 import android.content.ClipData;
 import android.content.Intent;
@@ -26,7 +23,6 @@ import android.util.Log;
 import android.net.Uri;
 
 import android.content.ContentResolver;
-import android.content.Context;
 import android.webkit.MimeTypeMap;
 
 import org.apache.cordova.CallbackContext;
@@ -250,7 +246,7 @@ public class IntentPlugin extends CordovaPlugin {
             //get the file's name if there is one
             int column_index = cursor.getColumnIndexOrThrow("_display_name");
             String fileName = cursor.getString(column_index);
-
+            fileName = fileName.replaceAll("[^a-zA-Z0-9.]+", "");
             //read the file from the content://
             ParcelFileDescriptor fileParcel = cR.openFileDescriptor(Uri.parse(data.getString(0)), "r");
             InputStream fileInput = new FileInputStream(fileParcel.getFileDescriptor());
@@ -259,8 +255,10 @@ public class IntentPlugin extends CordovaPlugin {
             String path = this.cordova.getActivity().getApplicationContext().getFilesDir() + "/openIn/" + fileName;
             File temp = new File(path);
             OutputStream output = new FileOutputStream(temp, false);
-            int c;
-            while ((c = fileInput.read()) != -1) output.write(c);
+
+            byte[] buffer = new byte[128 * 1024];
+            int read;
+            while ((read = fileInput.read(buffer)) != -1) output.write(buffer, 0, read);
 
             //cleanup and send the sandbox url
             fileInput.close();
