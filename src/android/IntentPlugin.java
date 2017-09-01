@@ -1,5 +1,11 @@
 package com.napolitano.cordova.plugin.intent;
 
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -9,6 +15,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
 import android.database.Cursor;
 import android.content.ClipData;
@@ -227,26 +234,59 @@ public class IntentPlugin extends CordovaPlugin {
 
     public boolean getRealPathFromContentUrl(final JSONArray data, final CallbackContext context) {
         if(data.length() != 1) {
+            //make sure there is a path to work with
             context.sendPluginResult(new PluginResult(PluginResult.Status.INVALID_ACTION));
             return false;
         }
+
+        //get The app's contentResolver
         ContentResolver cR = this.cordova.getActivity().getApplicationContext().getContentResolver();
-        Cursor cursor = null;
+
         try {
-            String[] proj = { MediaStore.Images.Media.DATA };
-            cursor = cR.query(Uri.parse(data.getString(0)),  proj, null, null, null);
-            int column_index = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+            //create a cursor for meta data look up on the file
+            Cursor cursor = cR.query(Uri.parse(data.getString(0)),  null, null, null, null);
             cursor.moveToFirst();
 
-            context.sendPluginResult(new PluginResult(PluginResult.Status.OK, cursor.getString(column_index)));
-            return true;
-        } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
+            //get the file's name if there is one
+            int column_index = cursor.getColumnIndexOrThrow("_display_name");
+            String fileName = cursor.getString(column_index);
 
-            context.sendPluginResult(new PluginResult(PluginResult.Status.INVALID_ACTION));
-            return false;
+            //read the file from the content://
+            ParcelFileDescriptor fileParcel = cR.openFileDescriptor(Uri.parse(data.getString(0)), "r");
+            InputStream fileInput = new FileInputStream(fileParcel.getFileDescriptor());
+
+            //create a copy inside the app sandbox for use on the cordova side
+            String path = this.cordova.getActivity().getApplicationContext().getFilesDir() + "/openIn/" + fileName;
+            File temp = new File(path);
+            OutputStream output = new FileOutputStream(temp, false);
+            int c;
+            while ((c = fileInput.read()) != -1) output.write(c);
+
+            //cleanup and send the sandbox url
+            fileInput.close();
+            output.close();
+            cursor.close();
+            context.sendPluginResult(new PluginResult(PluginResult.Status.OK, temp.toString()));
         }
+        catch(Exception e){
+            try{
+                //try again without looking up the file name
+                context.sendPluginResult(new PluginResult(PluginResult.Status.INVALID_ACTION));
+                ParcelFileDescriptor fileParcel = cR.openFileDescriptor(Uri.parse(data.getString(0)), "r");
+                InputStream fileInput = new FileInputStream(fileParcel.getFileDescriptor());
+                String path = this.cordova.getActivity().getApplicationContext().getFilesDir() + "/openIn/OpenInFile";
+                File temp = new File(path);
+                OutputStream output = new FileOutputStream(temp, false);
+                int c;
+                while ((c = fileInput.read()) != -1) output.write(c);
+                fileInput.close();
+                output.close();
+                context.sendPluginResult(new PluginResult(PluginResult.Status.OK, temp.toString()));
+            }
+            catch(Exception err){
+                context.sendPluginResult(new PluginResult(PluginResult.Status.INVALID_ACTION));
+            }
+        }
+        return true;
     }
 }
